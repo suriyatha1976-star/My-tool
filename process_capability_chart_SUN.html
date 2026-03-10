@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Process Capability Chart — Cp / Cpk Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --green: #3fb950;
+    --green-dim: #238636;
+    --red: #f85149;
+    --red-dim: #da3633;
+    --blue: #58a6ff;
+    --yellow: #e3b341;
+    --actual: #58a6ff;
+    --target: #3fb950;
+    --accent: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans Thai', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--blue), var(--accent));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+  }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+  header span { font-size: 12px; color: var(--text2); margin-left: 4px; }
+
+  .layout { display: flex; flex: 1; gap: 0; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 320px; min-width: 280px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 18px 16px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+    color: var(--text2); text-transform: uppercase;
+    border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 10px;
+  }
+  .field-group { display: flex; flex-direction: column; gap: 8px; }
+  .field-row { display: flex; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  label { font-size: 12px; color: var(--text2); font-weight: 500; }
+  input[type=number], input[type=text] {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 7px 10px;
+    font-size: 13px; font-family: 'IBM Plex Mono', monospace;
+    width: 100%; outline: none;
+    transition: border-color .2s;
+  }
+  input[type=number]:focus, input[type=text]:focus { border-color: var(--blue); }
+
+  /* SLIDER */
+  .slider-row { display: flex; flex-direction: column; gap: 4px; }
+  .slider-label { display: flex; justify-content: space-between; align-items: center; }
+  .slider-label label { font-size: 12px; color: var(--text2); font-weight: 500; }
+  .slider-label .val {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    color: var(--blue); font-weight: 600;
+    background: var(--surface2); padding: 2px 7px; border-radius: 4px;
+  }
+  .slider-label .val.green { color: var(--green); }
+  input[type=range] {
+    -webkit-appearance: none; width: 100%; height: 4px;
+    background: var(--border); border-radius: 2px; outline: none;
+  }
+  input[type=range].actual-range::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    background: var(--actual); border-radius: 50%; cursor: pointer;
+  }
+  input[type=range].target-range::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    background: var(--target); border-radius: 50%; cursor: pointer;
+  }
+
+  /* CHECKBOXES */
+  .checkbox-group { display: flex; flex-direction: column; gap: 8px; }
+  .cb-item {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 7px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface2);
+    transition: border-color .2s, background .2s;
+  }
+  .cb-item:hover { border-color: var(--blue); }
+  .cb-item input[type=checkbox] { accent-color: var(--blue); width: 14px; height: 14px; cursor: pointer; }
+  .cb-item span { font-size: 12px; }
+
+  /* LEGEND */
+  .legend { display: flex; gap: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* MAIN */
+  .main { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+
+  .chart-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 18px 12px;
+    position: relative;
+  }
+  .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .chart-header h2 { font-size: 14px; font-weight: 600; }
+
+  canvas { display: block; width: 100%; }
+
+  /* INTERPRETATION */
+  .interp-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+  }
+  .interp-title { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .interp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .interp-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px;
+  }
+  .interp-card .card-title { font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 8px; }
+  .interp-card .card-body { font-size: 13px; line-height: 1.65; }
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    margin-right: 4px; margin-bottom: 3px;
+  }
+  .tag.good { background: #238636; color: #3fb950; }
+  .tag.warn { background: #5a4a00; color: #e3b341; }
+  .tag.bad  { background: #4a1919; color: #f85149; }
+
+  .ppm-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+  .ppm-box {
+    flex: 1; min-width: 120px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; text-align: center;
+  }
+  .ppm-box .ppm-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+  .ppm-box .ppm-val { font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; margin: 4px 0 2px; }
+  .ppm-box .ppm-pct { font-size: 11px; color: var(--text2); }
+  .ppm-box.red .ppm-val { color: var(--red); }
+  .ppm-box.grn .ppm-val { color: var(--green); }
+  .ppm-box.yel .ppm-val { color: var(--yellow); }
+
+  .phase-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--text2);
+  }
+  .phase-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Cp</div>
+  <h1>Process Capability Analyzer</h1>
+  <span>— Bell Curve (Actual vs Target)</span>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Spec -->
+    <div>
+      <div class="section-title">📐 ค่าสเปค (Specification)</div>
+      <div class="field-group">
+        <div class="field-row">
+          <div class="field">
+            <label>Nominal (ค่าสเปค)</label>
+            <input type="number" id="nominal" value="100" step="0.1">
+          </div>
+          <div class="field">
+            <label>n (จำนวนข้อมูล)</label>
+            <input type="number" id="n_val" value="100" min="2" step="1">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>USL (+) Upper</label>
+            <input type="number" id="usl_plus" value="6" step="0.01">
+          </div>
+          <div class="field">
+            <label>LSL (−) Lower</label>
+            <input type="number" id="lsl_minus" value="6" step="0.01">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actual -->
+    <div>
+      <div class="section-title" style="color:#58a6ff">🔵 Actual (ข้อมูลจริง)</div>
+      <div class="field-group">
+        <div class="slider-row">
+          <div class="slider-label">
+            <label>Cp (Actual)</label>
+            <div class="val" id="cp_act_val">1.33</div>
+          </div>
+          <input type="range" class="actual-range" id="cp_act" min="0.5" max="3.0" step="0.01" value="1.33">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label">
+            <label>Cpk (Actual)</label>
+            <div class="val" id="cpk_act_val">1.20</div>
+          </div>
+          <input type="range" class="actual-range" id="cpk_act" min="0.1" max="3.0" step="0.01" value="1.20">
+        </div>
+      </div>
+    </div>
+
+    <!-- Target -->
+    <div>
+      <div class="section-title" style="color:#3fb950">🟢 Target (เป้าหมาย)</div>
+      <div class="field-group">
+        <div class="slider-row">
+          <div class="slider-label">
+            <label>Cp (Target)</label>
+            <div class="val green" id="cp_tgt_val">1.67</div>
+          </div>
+          <input type="range" class="target-range" id="cp_tgt" min="0.5" max="3.0" step="0.01" value="1.67">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label">
+            <label>Cpk (Target)</label>
+            <div class="val green" id="cpk_tgt_val">1.50</div>
+          </div>
+          <input type="range" class="target-range" id="cpk_tgt" min="0.1" max="3.0" step="0.01" value="1.50">
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase -->
+    <div>
+      <div class="section-title">🏭 Phase Selection</div>
+      <div class="checkbox-group">
+        <label class="cb-item">
+          <input type="checkbox" name="phase" value="mc" id="ph_mc">
+          <span>⚙️ M/C Validation Phase</span>
+        </label>
+        <label class="cb-item">
+          <input type="checkbox" name="phase" value="npd" id="ph_npd" checked>
+          <span>🧪 New Product Development Phase</span>
+        </label>
+        <label class="cb-item">
+          <input type="checkbox" name="phase" value="mp" id="ph_mp">
+          <span>🏗️ Mass Production Phase</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div>
+      <div class="section-title">Legend</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--actual)"></div>Actual</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--target)"></div>Target</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Out-of-spec</div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <div class="chart-wrap">
+      <div class="chart-header">
+        <h2>📊 Bell Curve — Process Distribution</h2>
+        <div id="phase-label" class="phase-badge"><div class="dot"></div><span>New Product Development Phase</span></div>
+      </div>
+      <canvas id="chart" height="320"></canvas>
+    </div>
+
+    <!-- PPM -->
+    <div>
+      <div class="ppm-row" id="ppm-row"></div>
+    </div>
+
+    <!-- Interpretation -->
+    <div class="interp-wrap">
+      <div class="interp-title">🔍 การตีความผล (Interpretation)</div>
+      <div class="interp-grid" id="interp-grid"></div>
+    </div>
+
+  </div><!-- /main -->
+</div>
+
+<script>
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function normalPDF(x, mu, sigma) {
+  return Math.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * Math.sqrt(2 * Math.PI));
+}
+function normalCDF(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  const val = 1 - (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * z * z) * poly;
+  return z >= 0 ? val : 1 - val;
+}
+
+// ─── Draw ────────────────────────────────────────────────────────────────────
+function getData() {
+  const nominal = +document.getElementById('nominal').value;
+  const uslPlus = +document.getElementById('usl_plus').value;
+  const lslMinus = +document.getElementById('lsl_minus').value;
+  const n = Math.max(2, +document.getElementById('n_val').value);
+  const cpAct  = +document.getElementById('cp_act').value;
+  const cpkAct = +document.getElementById('cpk_act').value;
+  const cpTgt  = +document.getElementById('cp_tgt').value;
+  const cpkTgt = +document.getElementById('cpk_tgt').value;
+
+  const USL = nominal + uslPlus;
+  const LSL = nominal - lslMinus;
+  const tol = USL - LSL; // total tolerance
+
+  // sigma from Cp: sigma = tol / (6*Cp)
+  const sigmaAct = tol / (6 * cpAct);
+  const sigmaTgt = tol / (6 * cpTgt);
+
+  // mean from Cpk: Cpk = min((USL-mu)/(3s), (mu-LSL)/(3s))
+  // We derive: if Cpk <= Cp, mean shifted
+  // mu_upper = USL - 3*sigma*Cpk ; mu_lower = LSL + 3*sigma*Cpk
+  // pick mu closest to center
+  const muActUp = USL - 3 * sigmaAct * cpkAct;
+  const muActLo = LSL + 3 * sigmaAct * cpkAct;
+  const muAct = (Math.abs(muActUp - nominal) < Math.abs(muActLo - nominal)) ? muActUp : muActLo;
+
+  const muTgtUp = USL - 3 * sigmaTgt * cpkTgt;
+  const muTgtLo = LSL + 3 * sigmaTgt * cpkTgt;
+  const muTgt = (Math.abs(muTgtUp - nominal) < Math.abs(muTgtLo - nominal)) ? muTgtUp : muTgtLo;
+
+  return { nominal, USL, LSL, n, tol,
+           actual: { sigma: sigmaAct, mu: muAct, cp: cpAct, cpk: cpkAct },
+           target: { sigma: sigmaTgt, mu: muTgt, cp: cpTgt, cpk: cpkTgt } };
+}
+
+function drawChart() {
+  const d = getData();
+  const canvas = document.getElementById('chart');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth;
+  const H = 320;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Layout
+  const pad = { l: 52, r: 30, t: 30, b: 46 };
+  const cW = W - pad.l - pad.r;
+  const cH = H - pad.t - pad.b;
+
+  // X range: center ± 4.5 sigma of wider bell
+  const maxSigma = Math.max(d.actual.sigma, d.target.sigma);
+  const center = (d.actual.mu + d.target.mu) / 2;
+  const xMin = Math.min(d.LSL, center - 4.5 * maxSigma);
+  const xMax = Math.max(d.USL, center + 4.5 * maxSigma);
+
+  // Y max
+  const yPeakA = normalPDF(d.actual.mu, d.actual.mu, d.actual.sigma);
+  const yPeakT = normalPDF(d.target.mu, d.target.mu, d.target.sigma);
+  const yMax = Math.max(yPeakA, yPeakT) * 1.15;
+
+  const toX = x => pad.l + (x - xMin) / (xMax - xMin) * cW;
+  const toY = y => pad.t + cH - (y / yMax) * cH;
+
+  // BG
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const gy = pad.t + (cH / 5) * i;
+    ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(pad.l + cW, gy); ctx.stroke();
+  }
+
+  // Filled bell — helper
+  function drawBell(mu, sigma, color, colorOut) {
+    const steps = 600;
+    const dx = (xMax - xMin) / steps;
+
+    // Green fill (inside spec)
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = xMin + i * dx;
+      const cx = Math.max(d.LSL, Math.min(d.USL, x));
+      if (x < d.LSL || x > d.USL) continue;
+      const y = normalPDF(x, mu, sigma);
+      if (!started) { ctx.moveTo(toX(cx), toY(0)); started = true; }
+      ctx.lineTo(toX(cx), toY(y));
+    }
+    if (started) {
+      ctx.lineTo(toX(Math.min(d.USL, xMax)), toY(0));
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    // Red fill — LEFT tail
+    ctx.beginPath();
+    started = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = xMin + i * dx;
+      if (x > d.LSL) break;
+      const y = normalPDF(x, mu, sigma);
+      if (!started) { ctx.moveTo(toX(x), toY(0)); started = true; }
+      ctx.lineTo(toX(x), toY(y));
+    }
+    if (started) {
+      ctx.lineTo(toX(d.LSL), toY(normalPDF(d.LSL, mu, sigma)));
+      ctx.lineTo(toX(d.LSL), toY(0));
+      ctx.closePath();
+      ctx.fillStyle = colorOut;
+      ctx.fill();
+    }
+
+    // Red fill — RIGHT tail
+    ctx.beginPath();
+    started = false;
+    for (let i = 0; i <= steps; i++) {
+      const x = xMin + i * dx;
+      if (x < d.USL) continue;
+      const y = normalPDF(x, mu, sigma);
+      if (!started) { ctx.moveTo(toX(d.USL), toY(normalPDF(d.USL, mu, sigma))); started = true; }
+      ctx.lineTo(toX(x), toY(y));
+    }
+    if (started) {
+      ctx.lineTo(toX(xMax), toY(0));
+      ctx.lineTo(toX(d.USL), toY(0));
+      ctx.closePath();
+      ctx.fillStyle = colorOut;
+      ctx.fill();
+    }
+
+    // Outline
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const x = xMin + i * dx;
+      const y = normalPDF(x, mu, sigma);
+      i === 0 ? ctx.moveTo(toX(x), toY(y)) : ctx.lineTo(toX(x), toY(y));
+    }
+    ctx.strokeStyle = color.replace('33','cc').replace('rgba','rgba');
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  drawBell(d.target.mu, d.target.sigma, 'rgba(63,185,80,0.25)', 'rgba(248,81,73,0.30)');
+  drawBell(d.actual.mu, d.actual.sigma, 'rgba(88,166,255,0.30)', 'rgba(248,81,73,0.40)');
+
+  // Mean lines
+  function drawMeanLine(mu, color, label) {
+    const x = toX(mu);
+    ctx.setLineDash([4,3]);
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + cH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = color; ctx.font = '600 10px IBM Plex Mono';
+    ctx.fillText(label, x + 3, pad.t + 12);
+  }
+  drawMeanLine(d.actual.mu, '#58a6ff', 'μ Act');
+  drawMeanLine(d.target.mu, '#3fb950', 'μ Tgt');
+
+  // USL / LSL lines
+  function drawSpecLine(xVal, label, color) {
+    const px = toX(xVal);
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(px, pad.t - 10); ctx.lineTo(px, pad.t + cH); ctx.stroke();
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(px, pad.t - 10);
+    ctx.lineTo(px - 5, pad.t - 2);
+    ctx.lineTo(px + 5, pad.t - 2);
+    ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+    // Label
+    ctx.fillStyle = color; ctx.font = 'bold 11px IBM Plex Sans Thai';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, px, pad.t - 14);
+    ctx.fillText(xVal.toFixed(2), px, pad.t + cH + 14);
+    ctx.textAlign = 'left';
+  }
+  drawSpecLine(d.USL, 'USL', '#f85149');
+  drawSpecLine(d.LSL, 'LSL', '#f85149');
+
+  // ±3σ annotation (actual)
+  const x3L = d.actual.mu - 3 * d.actual.sigma;
+  const x3R = d.actual.mu + 3 * d.actual.sigma;
+  // bracket
+  const by = pad.t + cH + 30;
+  ctx.strokeStyle = '#58a6ff66'; ctx.lineWidth = 1; ctx.setLineDash([2,2]);
+  ctx.beginPath(); ctx.moveTo(toX(x3L), by - 10); ctx.lineTo(toX(x3L), by); ctx.lineTo(toX(x3R), by); ctx.lineTo(toX(x3R), by - 10); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#58a6ff'; ctx.font = '10px IBM Plex Mono'; ctx.textAlign = 'center';
+  ctx.fillText('±3σ (Actual)', toX(d.actual.mu), by + 10);
+  ctx.textAlign = 'left';
+
+  // Y-axis
+  ctx.fillStyle = '#8b949e'; ctx.font = '10px IBM Plex Mono';
+  for (let i = 0; i <= 4; i++) {
+    const v = (yMax * i / 4);
+    const yp = toY(v);
+    ctx.fillText(v.toFixed(3), 2, yp + 3);
+  }
+
+  // X-axis
+  ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t + cH + 1); ctx.lineTo(pad.l + cW, pad.t + cH + 1); ctx.stroke();
+
+  // ─3 label under left tail, +3 under right
+  ctx.fillStyle = '#8b949e88'; ctx.font = 'bold 10px IBM Plex Mono'; ctx.textAlign = 'center';
+  ctx.fillText('-3σ', toX(x3L), pad.t + cH + 14);
+  ctx.fillText('+3σ', toX(x3R), pad.t + cH + 14);
+  ctx.textAlign = 'left';
+
+  updateInterpretation(d);
+  updatePPM(d);
+  updatePhaseLabel();
+}
+
+// ─── Interpretation ───────────────────────────────────────────────────────────
+function grade(cp, cpk) {
+  let spread, center, stable;
+  if (cp >= 1.67) spread = ['good', 'กระจายตัวดีมาก (Excellent)'];
+  else if (cp >= 1.33) spread = ['good', 'กระจายตัวดี (Capable)'];
+  else if (cp >= 1.0) spread = ['warn', 'กระจายตัวพอได้ (Marginal)'];
+  else spread = ['bad', 'กระจายตัวแย่ (Incapable)'];
+
+  const shift = Math.abs(cp - cpk);
+  if (shift < 0.05) center = ['good', 'ค่าเฉลี่ยอยู่กึ่งกลาง ✓'];
+  else if (shift < 0.2) center = ['warn', 'ค่าเฉลี่ยเบี่ยงเล็กน้อย'];
+  else center = ['bad', 'ค่าเฉลี่ยเบี่ยงมาก !'];
+
+  if (cpk >= 1.33) stable = ['good', 'กระบวนการมีเสถียรภาพดี'];
+  else if (cpk >= 1.0) stable = ['warn', 'กระบวนการพอยอมรับได้'];
+  else stable = ['bad', 'กระบวนการไม่เสถียร'];
+
+  return { spread, center, stable };
+}
+
+function ppm(mu, sigma, USL, LSL) {
+  const pUpper = 1 - normalCDF((USL - mu) / sigma);
+  const pLower = normalCDF((LSL - mu) / sigma);
+  const pTotal = pUpper + pLower;
+  return {
+    upper: Math.round(pUpper * 1e6),
+    lower: Math.round(pLower * 1e6),
+    total: Math.round(pTotal * 1e6),
+    pctU: (pUpper * 100).toFixed(4),
+    pctL: (pLower * 100).toFixed(4),
+    pctT: (pTotal * 100).toFixed(4),
+  };
+}
+
+function updateInterpretation(d) {
+  const gA = grade(d.actual.cp, d.actual.cpk);
+  const gT = grade(d.target.cp, d.target.cpk);
+
+  function card(title, g, color) {
+    return `<div class="interp-card">
+      <div class="card-title" style="color:${color}">${title}</div>
+      <div class="card-body">
+        <span class="tag ${g.spread[0]}">${g.spread[1]}</span>
+        <span class="tag ${g.center[0]}">${g.center[1]}</span>
+        <span class="tag ${g.stable[0]}">${g.stable[1]}</span>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('interp-grid').innerHTML =
+    card('🔵 Actual — คุณภาพกระบวนการ', gA, '#58a6ff') +
+    card('🟢 Target — คุณภาพกระบวนการ', gT, '#3fb950');
+}
+
+function updatePPM(d) {
+  const pA = ppm(d.actual.mu, d.actual.sigma, d.USL, d.LSL);
+  const pT = ppm(d.target.mu, d.target.sigma, d.USL, d.LSL);
+
+  function box(label, val, pct, cls, extra) {
+    return `<div class="ppm-box ${cls}">
+      <div class="ppm-label">${label} ${extra||''}</div>
+      <div class="ppm-val">${val.toLocaleString()}</div>
+      <div class="ppm-pct">${pct}% ต่อล้านชิ้น</div>
+    </div>`;
+  }
+
+  document.getElementById('ppm-row').innerHTML =
+    `<div style="font-size:12px;color:#8b949e;width:100%;padding-bottom:4px;font-weight:600">🔵 ACTUAL — ของเสียต่อ 1 ล้านชิ้น (PPM)</div>` +
+    box('Upper (USL)', pA.upper, pA.pctU, pA.upper > 0 ? 'red' : 'grn', '') +
+    box('Lower (LSL)', pA.lower, pA.pctL, pA.lower > 0 ? 'red' : 'grn', '') +
+    box('รวม Total', pA.total, pA.pctT, pA.total > 1000 ? 'red' : pA.total > 100 ? 'yel' : 'grn', '') +
+    `<div style="font-size:12px;color:#8b949e;width:100%;padding-bottom:4px;padding-top:10px;font-weight:600">🟢 TARGET — ของเสียต่อ 1 ล้านชิ้น (PPM)</div>` +
+    box('Upper (USL)', pT.upper, pT.pctU, pT.upper > 0 ? 'red' : 'grn', '') +
+    box('Lower (LSL)', pT.lower, pT.pctL, pT.lower > 0 ? 'red' : 'grn', '') +
+    box('รวม Total', pT.total, pT.pctT, pT.total > 1000 ? 'red' : pT.total > 100 ? 'yel' : 'grn', '');
+}
+
+function updatePhaseLabel() {
+  const labels = { mc: 'M/C Validation Phase', npd: 'New Product Development Phase', mp: 'Mass Production Phase' };
+  const checked = [...document.querySelectorAll('input[name=phase]:checked')].map(c => labels[c.value]);
+  const el = document.getElementById('phase-label');
+  el.querySelector('span').textContent = checked.length ? checked.join(' | ') : 'No Phase Selected';
+}
+
+// ─── Bind ─────────────────────────────────────────────────────────────────────
+function syncSlider(id, displayId, decimals = 2) {
+  const s = document.getElementById(id);
+  const d = document.getElementById(displayId);
+  s.addEventListener('input', () => { d.textContent = (+s.value).toFixed(decimals); drawChart(); });
+}
+syncSlider('cp_act', 'cp_act_val');
+syncSlider('cpk_act', 'cpk_act_val');
+syncSlider('cp_tgt', 'cp_tgt_val');
+syncSlider('cpk_tgt', 'cpk_tgt_val');
+
+['nominal','usl_plus','lsl_minus','n_val'].forEach(id =>
+  document.getElementById(id).addEventListener('input', drawChart));
+
+document.querySelectorAll('input[name=phase]').forEach(c =>
+  c.addEventListener('change', () => { updatePhaseLabel(); drawChart(); }));
+
+window.addEventListener('resize', drawChart);
+drawChart();
+</script>
+</body>
+</html>
